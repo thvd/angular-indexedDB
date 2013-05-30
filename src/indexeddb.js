@@ -203,16 +203,24 @@ angular.module('xc.indexedDB', []).provider('$indexedDB', function() {
              * @returns {object} $q.promise a promise on successfull execution
              */  
             insert: function(data){
+                var d = $q.defer();
                 return this.internalObjectStore(this.storeName, READWRITE).then(function(store){
                     var req;
                     if (angular.isArray(data)) {
+                        var deferreds = [];
                         data.forEach(function(item){
-                            req.store.add(item);
-                            req.onsuccess = req.onerror = requestCallback;
+                            var deferred = $q.defer();
+                            req = store.add(item);
+                            req.onsuccess = deferred.resolve;
+                            req.onerror = deferred.reject;
+                            deferreds.push(deferred);
                         });
+                        return $q.all(deferreds);
                     } else {
                         req = store.add(data);
-                        req.onsuccess = req.onerror = requestCallback;
+                        req.onsuccess = d.resolve;
+                        req.onerror = d.reject;
+                        return d.promise;
                     }
                 });                      
             },
@@ -230,18 +238,26 @@ angular.module('xc.indexedDB', []).provider('$indexedDB', function() {
              * @returns {object} $q.promise a promise on successfull execution
              */
             upsert: function(data){
+                var d = $q.defer();
                 return this.internalObjectStore(this.storeName, READWRITE).then(function(store){
                     var req;
                     if (angular.isArray(data)) {
+                        var deferreds = [];
                         data.forEach(function(item){
+                            var deferred = $q.defer();
                             req = store.put(item);
-                            req.onsuccess = req.onerror = requestCallback;
+                            req.onsuccess = deferred.resolve;
+                            req.onerror = deferred.reject;
+                            deferreds.push(deferred);
                         });
+                        return $q.all(deferreds);
                     } else {
                         req = store.put(data);
-                        req.onsuccess = req.onerror = requestCallback;
+                        req.onsuccess = d.resolve;
+                        req.onerror = d.reject;
+                        return d.promise;
                     }
-                });                      
+                });
             },
             /** 
              * @ngdoc method
@@ -255,9 +271,12 @@ angular.module('xc.indexedDB', []).provider('$indexedDB', function() {
              * @returns {object} $q.promise a promise on successfull execution
              */
             delete: function(key) {
+                var d = $q.defer();
                 return this.internalObjectStore(this.storeName, READWRITE).then(function(store){
                     var req = store.delete(key);
-                    req.onsuccess = req.onerror = requestCallback;
+                    req.onsuccess = d.resolve;
+                    req.onerror = d.reject;
+                    return d.promise;
                 });
             },
             /** 
@@ -271,10 +290,13 @@ angular.module('xc.indexedDB', []).provider('$indexedDB', function() {
              * @returns {object} $q.promise a promise on successfull execution
              */
             clear: function() {
+                var d = $q.defer();
                 return this.internalObjectStore(this.storeName, READWRITE).then(function(store){
                     var req = store.clear();
-                    req.onsuccess = req.onerror = requestCallback;
-                });                
+                    req.onsuccess = d.resolve;
+                    req.onerror = d.reject;
+                    return d.promise;
+                });
             },
             /** 
              * @ngdoc method
@@ -304,6 +326,7 @@ angular.module('xc.indexedDB', []).provider('$indexedDB', function() {
              * @returns {any value} value ...wrapped in a promise
              */
             find: function(keyOrIndex, key){
+                var d = $q.defer();
                 return this.internalObjectStore(this.storeName, READONLY).then(function(store){
                     var req;
                     if(key) {
@@ -311,7 +334,9 @@ angular.module('xc.indexedDB', []).provider('$indexedDB', function() {
                     } else {
                         req = store.get(keyOrIndex);
                     }
-                    req.onsuccess = req.onerror = requestCallback;
+                    req.onsuccess = d.resolve;
+                    req.onerror = d.reject;
+                    return d.promise;
                 });
             },
             /** 
@@ -331,7 +356,9 @@ angular.module('xc.indexedDB', []).provider('$indexedDB', function() {
                     var req;
                     if (store.getAll) {         
                         req = store.getAll();
-                        req.onsuccess = req.onerror = requestCallback;
+                        req.onsuccess = function(e) {
+                            d.resolve(e.target.result);
+                        };
                     } else {
                         req = store.openCursor();
                         req.onsuccess = function(e) {
@@ -343,11 +370,12 @@ angular.module('xc.indexedDB', []).provider('$indexedDB', function() {
                                 d.resolve(results);
                             }
                         };
-                        req.onerror = function(e) {
-                            d.reject(e.target.result);
-                        }
-                        return d.promise;
                     }
+
+                    req.onerror = function(e) {
+                        d.reject(e.target.result);
+                    };
+                    return d.promise;
                 });
             },
             /** 
@@ -365,6 +393,7 @@ angular.module('xc.indexedDB', []).provider('$indexedDB', function() {
              * @returns {object} IDBCursor ...wrapped in a promise
              */
             each: function(options){
+                var d = $q.defer();
                 return this.internalObjectStore(this.storeName, READWRITE).then(function(store){
                    var req;
                    options = options || defaultQueryOptions;
@@ -373,7 +402,13 @@ angular.module('xc.indexedDB', []).provider('$indexedDB', function() {
                     } else {
                         req = store.openCursor(options.keyRange, options.direction);
                     }
-                    req.onsuccess = req.onerror = requestCallback;
+
+                    req.onsuccess = function(e) {
+                        d.resolve(e.target.result);
+                    };
+                    req.onerror = d.reject;
+
+                    return d.promise;
                 });
             }
         };
